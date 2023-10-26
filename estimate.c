@@ -1,10 +1,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-double **multiply(double **matrix1, double **matrix2)
+double **multiply(double **matrix1, double **matrix2, int rows, int cols, int common)
 {
-    int rows = sizeof(matrix1) / sizeof(matrix1[0]);
-    int cols = sizeof(matrix2[0]) / sizeof(matrix2[0][0]);
     double **result = malloc(rows * sizeof(double *));
     for (int i = 0; i < rows; i++)
     {
@@ -23,83 +21,86 @@ double **multiply(double **matrix1, double **matrix2)
     {
         for (int j = 0; j < cols; j++)
         {
-            result[i][j] += matrix1[i][j] * matrix2[j][i];
+            for (int x = 0; x < common; x++)
+            {
+                result[i][j] += matrix1[i][x] * matrix2[x][j];
+            }
         }
     }
     return result;
 }
 
-double **trans(double **matrix)
+double **trans(double **matrix, int rows, int cols)
 {
-    int rows = sizeof(matrix)/sizeof(matrix[0]);
-    int cols = sizeof(matrix[0])/sizeof(matrix[0][0]);
-    double **result = malloc(rows * sizeof(double *));
+    double **result = malloc(cols * sizeof(double *));
     for (int i = 0; i < cols; i++)
     {
         result[i] = malloc(rows * sizeof(double));
     }
 
-    for (int i = 0; i < rows; i++)
+    for (int i = 0; i < cols; i++)
     {
-        for (int j = 0; j < cols; j++)
+        for (int j = 0; j < rows; j++)
         {
-            result[j][i] = matrix[i][j];
+            result[i][j] = matrix[j][i];
         }
     }
     return result;
 }
 
-double **inverse(double **matrix)
-{
-    int size = sizeof(matrix)/sizeof(matrix[0]);
-    double **identity = malloc(size * sizeof(double *));
-    for (int i = 0; i < size; i++)
-    {
-        identity[i] = malloc(size * sizeof(double));
+double **inverse(double **matrix, int size) {
+    double **N = (double **)malloc(size * sizeof(double *));
+    for (int i = 0; i < size; i++) {
+        N[i] = (double *)malloc(size * sizeof(double));
     }
 
-    for (int i = 0; i < size; i++)
-    {
-        int pivot = matrix[i][i];
-        for (int x = i; x < size; x++)
-        {
-            matrix[i][x] /= pivot;
-            identity[i][x] /= pivot;
-        }
-        for (int j = i + 1; j < size; j++)
-        {
-            pivot = matrix[j][i];
-            for (int n = 0; n < size; n++)
-            {
-                matrix[j][n] -= matrix[i][n] * pivot;
-                identity[j][n] -= identity[i][n] * pivot;
+    for (int i = 0; i < size; i++) {
+        for (int j = 0; j < size; j++) {
+            if (i == j) {
+                N[i][j] = 1.0;
+            } else {
+                N[i][j] = 0.0;
             }
         }
     }
 
-    for (int i = size - 1; i > 0; i--)
-    {
-        for (int j = i; j > 0; j--)
-        {
-            matrix[i][j - 1] -= matrix[i][j - 1] * matrix[i][j];
+    for (int p = 0; p < size; p++) {
+        double f = matrix[p][p];
+        for (int i = 0; i < size; i++) {
+            matrix[p][i] /= f;
+            N[p][i] /= f;
+        }
+
+        for (int i = 0; i < size; i++) {
+            if (i != p) {
+                f = matrix[i][p];
+                for (int j = 0; j < size; j++) {
+                    matrix[i][j] -= matrix[p][j] * f;
+                    N[i][j] -= N[p][j] * f;
+                }
+            }
         }
     }
 
-    return identity;
+    return N;
 }
 
-double **getWeights(double **train, double **Y){
-    return multiply(multiply(inverse(multiply(trans(train), train)), trans(train)), Y);
+double **getWeights(double **train, double **Y, int rows, int cols, int common)
+{
+    double **A = inverse(multiply(trans(train, rows, cols), train, cols, cols, rows), cols);
+    return multiply(multiply(A, trans(train, rows, cols), cols, rows, cols), Y, cols, 1, rows);
 }
 
-double **getEstimate(double **data, double **W){
-    return multiply(data, W);
+double **getEstimate(double **data, double **W, int rows, int common)
+{
+    return multiply(data, W, rows, 1, common);
 }
 
 int main(int argv, char **argc)
 {
     if (argv != 3)
     {
+        printf("error");
         exit(EXIT_FAILURE);
     }
 
@@ -110,7 +111,7 @@ int main(int argv, char **argc)
         exit(EXIT_FAILURE);
     }
 
-    char *type;
+    char type[6];
     fscanf(file, "%5s", type);
 
     int trainK;
@@ -119,23 +120,27 @@ int main(int argv, char **argc)
     int n;
     fscanf(file, "%d", &n);
 
-    double **training = malloc((n) * sizeof(double*));
+    double **training = malloc((n) * sizeof(double *));
     for (int i = 0; i < n; i++)
     {
         training[i] = malloc((trainK + 1) * sizeof(double));
     }
 
-    double **Y = malloc((n) * sizeof(double));
+    double **Y = malloc((n) * sizeof(double *));
+    for (int i = 0; i < n; i++)
+    {
+        Y[i] = malloc(sizeof(double));
+    }
 
     for (int i = 0; i < n; i++)
     {
-        for (int j = 0; j < trainK + 1; j++)
+        for (int j = 0; j < trainK + 2; j++)
         {
             if (j == 0)
             {
-                training[i][j] = 1;
+                training[i][j] = 1.0;
             }
-            else if (j == trainK)
+            else if (j == trainK + 1)
             {
                 double value;
                 fscanf(file, "%lf", &value);
@@ -157,7 +162,7 @@ int main(int argv, char **argc)
         exit(EXIT_FAILURE);
     }
 
-    char *type2;
+    char type2[6];
     fscanf(file, "%5s", type2);
 
     int dataK;
@@ -194,10 +199,11 @@ int main(int argv, char **argc)
             }
         }
     }
-
-    double **estimate = getEstimate(data, getWeights(training, Y));
-    for(int i=0; i<sizeof(estimate)/sizeof(estimate[0]); i++){
-        printf("%lf\n", estimate[i][0]);
+    double **weights = getWeights(training, Y, n, trainK + 1, trainK + 1);
+    double **estimate = getEstimate(data, weights, m, dataK + 1);
+    for (int i = 0; i < m; i++)
+    {
+        printf("%.0f\n", estimate[i][0]);
     }
     fclose(file);
     exit(EXIT_SUCCESS);
