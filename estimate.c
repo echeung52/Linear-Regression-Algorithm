@@ -48,47 +48,76 @@ double **trans(double **matrix, int rows, int cols)
     return result;
 }
 
-double **inverse(double **matrix, int size) {
-    double **N = (double **)malloc(size * sizeof(double *));
-    for (int i = 0; i < size; i++) {
-        N[i] = (double *)malloc(size * sizeof(double));
+double **inverse(double **matrix, int size)
+{
+    double **identity = malloc(size * sizeof(double *));
+    for (int i = 0; i < size; i++)
+    {
+        identity[i] = malloc(size * sizeof(double));
     }
 
-    for (int i = 0; i < size; i++) {
-        for (int j = 0; j < size; j++) {
-            if (i == j) {
-                N[i][j] = 1.0;
-            } else {
-                N[i][j] = 0.0;
+    for (int i = 0; i < size; i++)
+    {
+        for (int j = 0; j < size; j++)
+        {
+            if (i == j)
+            {
+                identity[i][j] = 1.0;
+            }
+            else
+            {
+                identity[i][j] = 0.0;
             }
         }
     }
 
-    for (int p = 0; p < size; p++) {
-        double f = matrix[p][p];
-        for (int i = 0; i < size; i++) {
-            matrix[p][i] /= f;
-            N[p][i] /= f;
+    for (int p = 0; p < size; p++)
+    {
+        double pivot = matrix[p][p];
+        for (int i = 0; i < size; i++)
+        {
+            matrix[p][i] /= pivot;
+            identity[p][i] /= pivot;
         }
 
-        for (int i = 0; i < size; i++) {
-            if (i != p) {
-                f = matrix[i][p];
-                for (int j = 0; j < size; j++) {
-                    matrix[i][j] -= matrix[p][j] * f;
-                    N[i][j] -= N[p][j] * f;
+        for (int i = 0; i < size; i++)
+        {
+            if (i != p)
+            {
+                pivot = matrix[i][p];
+                for (int j = 0; j < size; j++)
+                {
+                    matrix[i][j] -= matrix[p][j] * pivot;
+                    identity[i][j] -= identity[p][j] * pivot;
                 }
             }
         }
     }
 
-    return N;
+    return identity;
+}
+
+void freeMatrix(double **matrix, int rows)
+{
+    for (int i = 0; i < rows; i++)
+    {
+        free(matrix[i]);
+    }
+    free(matrix);
 }
 
 double **getWeights(double **train, double **Y, int rows, int cols, int common)
 {
-    double **A = inverse(multiply(trans(train, rows, cols), train, cols, cols, rows), cols);
-    return multiply(multiply(A, trans(train, rows, cols), cols, rows, cols), Y, cols, 1, rows);
+    double **A=trans(train, rows, cols);
+    double **B=multiply(A, train, cols, cols, rows);
+    double **C = inverse(B, cols);
+    double **D = multiply(C, A, cols, rows, cols);
+    double **E = multiply(D, Y, cols, 1, rows);
+    freeMatrix(A, cols);
+    freeMatrix(B, cols);
+    freeMatrix(C, cols);
+    freeMatrix(D, cols);
+    return E;
 }
 
 double **getEstimate(double **data, double **W, int rows, int common)
@@ -205,6 +234,12 @@ int main(int argv, char **argc)
     {
         printf("%.0f\n", estimate[i][0]);
     }
+
+    freeMatrix(training, n);
+    freeMatrix(data, m);
+    freeMatrix(Y, n);
+    freeMatrix(weights, trainK+1);
+    freeMatrix(estimate, m);
     fclose(file);
     exit(EXIT_SUCCESS);
 }
